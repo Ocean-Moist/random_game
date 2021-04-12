@@ -1,0 +1,24 @@
+[package]
+name = "yet_another_http_client"
+version = "0.0.1"
+authors = ["Rohan <rohanganapa@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3"
+futures-io = "0.3"
+async-std = "1.6"
+
+[dependencies.async-tls]
+version = "0.10"
+features = ["early-data"]
+
+[dependencies.pyo3]
+version = "0.12"
+features = ["extension-module"]
+
+[lib]
+name = "yet_another_http_client"
+crate-type = ["cdylib"]

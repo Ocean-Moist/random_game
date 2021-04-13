@@ -133,9 +133,8 @@ impl TLSConnectionManager {
     }
 }
 
-/// Arceus networking library. Implemented in Rust.
 #[pymodule]
-fn arceus_net(_py: Python, m: &PyModule) -> PyResult<()> {
+fn yet_another_http_client(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<ConnectionManager>()?;
     m.add_class::<TLSConnectionManager>()?;
     Ok(())

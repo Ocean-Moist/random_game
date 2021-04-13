@@ -2,13 +2,14 @@
 extern crate pyo3;
 
 use async_std::net::TcpStream;
-use async_std::task;
+use async_std::{io, task};
 use async_tls::client::TlsStream;
 use async_tls::TlsConnector;
 use futures::future;
-use futures::io::AsyncWriteExt;
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use pyo3::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::time::Duration;
 
 #[pyclass]
 struct ConnectionManager {
@@ -51,11 +52,18 @@ impl ConnectionManager {
             self.streams
                 .iter_mut()
                 .map(|s| s.write_all(payloads.next().unwrap())),
-		stream.read_to_end(&mut resp).await?;
-		return resp;
         ));
 
         Ok(())
+    }
+
+    #[args(timeout = "5")]
+    fn recieve(&mut self, timeout: u64) -> PyResult<Vec<Vec<u8>>> {
+        let mut bufs: Vec<Vec<u8>> = self.streams.iter().map(|_| Vec::new()).collect();
+        task::block_on(future::join_all(self.streams.iter_mut().zip(bufs.iter_mut()).map(|(s, b)| {
+            io::timeout(Duration::from_secs(timeout), s.read_to_end(b))
+        })));
+        Ok(bufs)
     }
 }
 
@@ -73,8 +81,8 @@ impl TLSConnectionManager {
         let addr_string = format!("{}:{}", host, port);
         TLSConnectionManager {
             address: addr_string.to_socket_addrs().unwrap().next().unwrap(),
-            domain: domain,
             streams: Vec::new(),
+            domain,
         }
     }
 
@@ -83,12 +91,13 @@ impl TLSConnectionManager {
         async fn create_stream(
             connector: &TlsConnector,
             address: SocketAddr,
-            domain: &String,
+            domain: &str,
         ) -> Option<TlsStream<TcpStream>> {
             let stream = TcpStream::connect(address).await.unwrap();
             connector.connect(domain, stream).await.ok()
         }
 
+        self.streams.reserve(connections as usize);
         task::block_on(async {
             self.streams.extend(
                 future::join_all(
@@ -105,21 +114,28 @@ impl TLSConnectionManager {
 
     fn send(&mut self, payloads: Vec<&[u8]>) -> PyResult<()> {
         let mut payloads = payloads.iter().cycle();
-	let mut resp = Vec::new();
         task::block_on(future::join_all(
             self.streams
                 .iter_mut()
                 .map(|s| s.write_all(payloads.next().unwrap())),
-		stream.read_to_end(&mut resp).await?;
-		reutrn resp;
-		));
+        ));
 
         Ok(())
     }
+
+    #[args(timeout = "5")]
+    fn recieve(&mut self, timeout: u64) -> PyResult<Vec<Vec<u8>>> {
+        let mut bufs: Vec<Vec<u8>> = self.streams.iter().map(|_| Vec::new()).collect();
+        task::block_on(future::join_all(self.streams.iter_mut().zip(bufs.iter_mut()).map(|(s, b)| {
+            io::timeout(Duration::from_secs(timeout), s.read_to_end(b))
+        })));
+        Ok(bufs)
+    }
 }
 
+/// Arceus networking library. Implemented in Rust.
 #[pymodule]
-fn yet_another_http_client(_py: Python, m: &PyModule) -> PyResult<()> {
+fn arceus_net(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<ConnectionManager>()?;
     m.add_class::<TLSConnectionManager>()?;
     Ok(())
